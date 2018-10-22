@@ -2,6 +2,7 @@ package observable
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -614,7 +615,7 @@ func TestObservableSkip(t *testing.T) {
 	sub := stream2.Subscribe(onNext)
 	<-sub
 
-	assert.Exactly(t, []int{5,1,8}, nums)	
+	assert.Exactly(t, []int{5, 1, 8}, nums)
 }
 
 func TestObservableSkipWithEmpty(t *testing.T) {
@@ -632,7 +633,7 @@ func TestObservableSkipWithEmpty(t *testing.T) {
 	sub := stream2.Subscribe(onNext)
 	<-sub
 
-	assert.Exactly(t, []int{}, nums)	
+	assert.Exactly(t, []int{}, nums)
 }
 
 func TestObservableSkipLast(t *testing.T) {
@@ -656,7 +657,7 @@ func TestObservableSkipLast(t *testing.T) {
 	sub := stream2.Subscribe(onNext)
 	<-sub
 
-	assert.Exactly(t, []int{0, 1, 3}, nums)	
+	assert.Exactly(t, []int{0, 1, 3}, nums)
 }
 
 func TestObservableSkipLastWithEmpty(t *testing.T) {
@@ -674,9 +675,8 @@ func TestObservableSkipLastWithEmpty(t *testing.T) {
 	sub := stream2.Subscribe(onNext)
 	<-sub
 
-	assert.Exactly(t, []int{}, nums)	
+	assert.Exactly(t, []int{}, nums)
 }
-
 
 func TestObservableDistinct(t *testing.T) {
 	items := []interface{}{1, 2, 2, 1, 3}
@@ -908,4 +908,43 @@ func TestRepeatWithNegativeTimesOperator(t *testing.T) {
 	<-sub
 
 	assert.Exactly(t, []string{"end"}, stringarray)
+}
+
+func TestZip(t *testing.T) {
+	it1, err := iterable.New([]interface{}{1, 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	it2, err := iterable.New([]interface{}{"a", "b", "c"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream1 := From(it1)
+	stream2 := From(it2)
+	o := Zip(func(i ...interface{}) interface{} {
+		var out string
+		for _, s := range i {
+			out += fmt.Sprintf("%v", s)
+		}
+		return out
+	}, stream1, stream2)
+
+	var count int
+	done := o.Subscribe(observer.Observer{
+		// Register a handler function for every next available item.
+		NextHandler: func(item interface{}) {
+			count++
+		},
+
+		// Register a handler for any emitted error.
+		ErrHandler: func(err error) {
+			assert.Nil(t, err)
+		},
+
+		// Register a handler when a stream is completed.
+		DoneHandler: func() {
+		},
+	})
+	<-done
+	assert.Equal(t, 2, count)
 }
