@@ -1,6 +1,7 @@
 package observable
 
 import (
+	"reflect"
 	"sync"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 type Observable <-chan interface{}
 
 var DefaultObservable = make(Observable)
+
+var none = new(uint)
 
 // New creates an Observable
 func New(buffer uint) Observable {
@@ -87,6 +90,42 @@ func (o Observable) Unsubscribe() subscription.Subscription {
 }
 */
 
+// CombineLatest emits an item whenever any of the source Observables emits an item
+func CombineLatest(o []Observable, apply fx.CombinableFunc) Observable {
+	out := make(chan interface{})
+	go func() {
+		chans := o
+		count := len(chans)
+		left := len(chans)
+		is := make([]interface{}, len(chans))
+		for i := 0; i < len(is); i++ {
+			is[i] = none
+		}
+		cases := make([]reflect.SelectCase, count)
+		for i := range cases {
+			cases[i].Dir = reflect.SelectRecv
+			cases[i].Chan = reflect.ValueOf(chans[i])
+		}
+		for count > 0 {
+			chosen, recv, recvOk := reflect.Select(cases)
+			if recvOk {
+				if is[chosen] == none {
+					left--
+				}
+				is[chosen] = recv.Interface()
+				if left == 0 {
+					out <- apply(is)
+				}
+			} else {
+				cases[chosen].Chan = reflect.ValueOf(nil)
+				count--
+			}
+		}
+		close(out)
+	}()
+	return Observable(out)
+}
+
 // Map maps a MappableFunc predicate to each item in Observable and
 // returns a new Observable with applied items.
 func (o Observable) Map(apply fx.MappableFunc) Observable {
@@ -94,6 +133,31 @@ func (o Observable) Map(apply fx.MappableFunc) Observable {
 	go func() {
 		for item := range o {
 			out <- apply(item)
+		}
+		close(out)
+	}()
+	return Observable(out)
+}
+
+// Combine multiple Observables into one by merging their emissions
+func Merge(o1 Observable, o2 Observable, on ...Observable) Observable {
+	out := make(chan interface{})
+	go func() {
+		chans := append([]Observable{o1, o2}, on...)
+		count := len(chans)
+		cases := make([]reflect.SelectCase, count)
+		for i := range cases {
+			cases[i].Dir = reflect.SelectRecv
+			cases[i].Chan = reflect.ValueOf(chans[i])
+		}
+		for count > 0 {
+			chosen, recv, recvOk := reflect.Select(cases)
+			if recvOk {
+				out <- recv.Interface()
+			} else {
+				cases[chosen].Chan = reflect.ValueOf(nil)
+				count--
+			}
 		}
 		close(out)
 	}()

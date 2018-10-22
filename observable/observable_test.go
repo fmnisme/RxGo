@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"testing"
 	"time"
 
@@ -947,4 +948,80 @@ func TestZip(t *testing.T) {
 	})
 	<-done
 	assert.Equal(t, 2, count)
+}
+
+func TestMergeOperator(t *testing.T) {
+	items1 := []interface{}{1, 2, 3}
+	items2 := []interface{}{4, 5, 6}
+	items3 := []interface{}{7, 8, 9}
+
+	it1, err := iterable.New(items1)
+	if err != nil {
+		t.Fail()
+	}
+	it2, err := iterable.New(items2)
+	if err != nil {
+		t.Fail()
+	}
+	it3, err := iterable.New(items3)
+	if err != nil {
+		t.Fail()
+	}
+
+	stream1 := From(it1)
+	stream2 := From(it2)
+	stream3 := From(it3)
+
+	streamMerged := Merge(stream1, stream2, stream3)
+
+	nums := []int{}
+	onNext := handlers.NextFunc(func(item interface{}) {
+		if num, ok := item.(int); ok {
+			nums = append(nums, num)
+		}
+	})
+
+	sub := streamMerged.Subscribe(onNext)
+	<-sub
+
+	sort.Ints(nums)
+	excepted := []int{
+		1, 2, 3, 4, 5, 6, 7, 8, 9,
+	}
+
+	assert.Exactly(t, excepted, nums)
+}
+
+func TestCombineLatestOperator(t *testing.T) {
+	stream1 := Interval(make(chan struct{}), 25*time.Millisecond).Take(3)
+	stream2 := Interval(make(chan struct{}), 30*time.Millisecond).Take(3).Map(func(in interface{}) interface{} {
+		return in.(int) * 10
+	})
+	stream3 := Interval(make(chan struct{}), 35*time.Millisecond).Take(3).Map(func(in interface{}) interface{} {
+		return in.(int) * 100
+	})
+
+	streamCombineLatest := CombineLatest([]Observable{stream1, stream2, stream3}, func(is []interface{}) interface{} {
+		sum := 0
+		for _, i := range is {
+			sum += i.(int)
+		}
+		return sum
+	})
+
+	nums := []int{}
+	onNext := handlers.NextFunc(func(item interface{}) {
+		if num, ok := item.(int); ok {
+			nums = append(nums, num)
+		}
+	})
+
+	sub := streamCombineLatest.Subscribe(onNext)
+	<-sub
+
+	excepted := []int{
+		0, 1, 11, 111, 112, 122, 222,
+	}
+
+	assert.Exactly(t, excepted, nums)
 }

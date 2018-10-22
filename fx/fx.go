@@ -21,4 +21,7 @@ type (
 	KeySelectorFunc func(interface{}) interface{}
 
 	ZippableFunc func(...interface{}) interface{}
+
+	// CombinableFunc defines a func that should should be passed to the CombinableLateast operator.
+	CombinableFunc func([]interface{}) interface{}
 )
