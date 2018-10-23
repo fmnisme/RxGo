@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	rxerrors "github.com/reactivex/rxgo/errors"
 	"github.com/reactivex/rxgo/fx"
 	"github.com/reactivex/rxgo/handlers"
 	"github.com/reactivex/rxgo/iterable"
@@ -677,6 +678,33 @@ func TestObservableSkipLastWithEmpty(t *testing.T) {
 	<-sub
 
 	assert.Exactly(t, []int{}, nums)
+}
+
+func TestObservable_Buffer(t *testing.T) {
+	items := []interface{}{1, 2, 3, 4}
+	it, err := iterable.New(items)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream1 := From(it).Buffer(3)
+
+	// 1,2,3
+	next, err := stream1.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, []interface{}{1, 2, 3}, next)
+
+	// 4
+	next, err = stream1.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, []interface{}{4}, next)
+
+	// EndOfIteratorError
+	_, err = stream1.Next()
+	assert.Equal(t, rxerrors.New(rxerrors.EndOfIteratorError), err)
 }
 
 func TestObservableDistinct(t *testing.T) {
