@@ -501,14 +501,15 @@ func Start(f fx.EmittableFunc, fs ...fx.EmittableFunc) Observable {
 	return Observable(source)
 }
 
-func Zip(apply fx.ZippableFunc, on ...Observable) Observable {
+func Zip(apply fx.ZippableFunc, o1 Observable, o2 Observable, on ...Observable) Observable {
 	out := make(chan interface{})
 	go func() {
 	OuterLoop:
 		for {
 			var ok bool
-			ins := make([]interface{}, len(on))
-			for idx, o := range on {
+			var os = append([]Observable{o1, o2}, on...)
+			ins := make([]interface{}, len(os))
+			for idx, o := range os {
 				ok = false
 				for in := range o {
 					ins[idx] = in
